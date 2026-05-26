@@ -29,6 +29,18 @@ The **skintwin-customer-portal** serves as the primary business management platf
 
 The **skintwin-integrations** repository provides the connector layer that enables both applications to communicate with external platforms (Shopify, Wix, OpenCart, payment processors, and accounting systems).
 
+### Shopify App + Federated ERP Integration
+
+The ecosystem is implemented as a **Shopify app-first platform**. Shopify acts as the merchant interaction surface, while internal services provide AI, training, and operations capabilities through the API Gateway.
+
+A **federated enterprise-wide ERP model** is used for multi-entity operations. Instead of forcing all organizations into one ERP backend, federation adapters map each ERP domain into canonical ecosystem entities:
+
+- Product, price list, inventory, and warehouse data from enterprise ERP domains into Shopify and internal services.
+- Orders, refunds, fulfillments, and invoices from Shopify/internal applications back into ERP finance and logistics domains.
+- Procurement and replenishment signals from ERP systems into storefront availability and recommended purchasing flows.
+
+This model preserves enterprise autonomy while maintaining cross-entity reporting and operational consistency.
+
 ### Frontend Template Integration
 
 The **business-directory-template** provides a reusable UI pattern for business discovery and listing. This template can be integrated into the customer portal as a public-facing directory for finding salons and therapists. The design system (Dark Atlas Interface with Electric Cyan and Amber Gold) can be adopted across all frontend applications for visual consistency.

@@ -16,10 +16,11 @@ The frontend architecture is guided by the following principles:
 
 ## 3. Frontend Applications
 
-The ecosystem will consist of three primary frontend applications:
+The ecosystem will consist of four primary frontend applications:
 
 | Application | Description | Key Features |
 |---|---|---|
+| **Shopify Embedded App** | Merchant-facing Shopify app surface for the ecosystem. | Embedded admin UX, app onboarding, webhook/event status, ERP sync controls. |
 | **Customer Portal** | The main business management application for salons, therapists, and customers. | Dashboards, booking management, e-commerce, reporting. |
 | **Training LMS** | The learning management system for skincare professionals. | Course delivery, quizzes, progress tracking, certification. |
 | **Business Directory** | A public-facing directory of salons and therapists. | Search, filtering, maps, business profiles. |
@@ -42,6 +43,7 @@ A pnpm monorepo will be used to manage the frontend codebase. This structure wil
 
 ```
 /apps
+  /shopify-app
   /customer-portal
   /training-lms
   /business-directory
@@ -80,6 +82,7 @@ The **Dark Atlas** design system, as defined in the `business-directory-template
 graph TD
     subgraph Monorepo
         subgraph apps
+            ShopifyApp[Shopify Embedded App]
             CustomerPortal[Customer Portal]
             TrainingLMS[Training LMS]
             BusinessDirectory[Business Directory]
@@ -96,6 +99,10 @@ graph TD
         APIGateway(API Gateway)
     end
 
+    ShopifyApp --> SharedUI
+    ShopifyApp --> DesignSystem
+    ShopifyApp --> SharedHooks
+
     CustomerPortal --> SharedUI
     CustomerPortal --> DesignSystem
     CustomerPortal --> SharedHooks
@@ -108,6 +115,7 @@ graph TD
     BusinessDirectory --> DesignSystem
     BusinessDirectory --> SharedHooks
 
+    ShopifyApp --> APIGateway
     CustomerPortal --> APIGateway
     TrainingLMS --> APIGateway
     BusinessDirectory --> APIGateway

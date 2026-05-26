@@ -78,6 +78,8 @@
 - Organization/Tenant entities
 
 ### Integration Patterns
+- Shopify app embedded runtime with webhook-driven orchestration
 - Webhook-based real-time sync
 - REST/GraphQL API communication
 - Event-driven architecture
+- Federated ERP domain synchronization via canonical entity mapping

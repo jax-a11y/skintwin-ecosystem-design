@@ -20,9 +20,11 @@ The backend will be composed of the following core microservices:
 
 | Service | Domain | Responsibility | Technology Stack |
 |---|---|---|---|
+| **Shopify App Service** | Commerce Runtime | Hosts embedded Shopify Admin app capabilities, app proxy endpoints, webhook handlers, and Shopify auth/session lifecycle. | Node.js, TypeScript, Shopify App Bridge, Shopify Admin API |
 | **Cognitive Service** | AI/ML | Provides AI-powered skin analysis, personalization, and recommendations. | Python, FastAPI, JAX, OpenCog |
 | **Customer & Org Service** | User Management | Manages users, organizations, tenants, authentication, and authorization. | Node.js, TypeScript, Express.js, Drizzle ORM |
 | **E-commerce & Booking Service** | Integrations | Connects to external e-commerce and booking platforms. | Python, Flask |
+| **Federated ERP Service** | Enterprise Data Federation | Coordinates enterprise-wide ERP federation across subsidiaries/business units for inventory, pricing, procurement, fulfillment, and financial postings. | Python/Node.js, REST/GraphQL adapters, Event-driven sync |
 | **LMS Service** | Education | Manages learning content, user progress, and certifications. | Node.js, TypeScript, Express.js, Drizzle ORM |
 | **API Gateway** | API Management | Single entry point for all frontend applications, handles routing and authentication. | Kong / Custom (Node.js) |
 | **Event Bus** | Communication | Facilitates asynchronous, event-driven communication between services. | RabbitMQ / Kafka |
@@ -41,9 +43,11 @@ graph TD
         APIGateway(API Gateway)
 
         subgraph Core Services
+            ShopifyAppService(Shopify App Service)
             CognitiveService(Cognitive Service)
             CustomerOrgService(Customer & Org Service)
             EcommBookingService(E-commerce & Booking Service)
+            FederatedERPService(Federated ERP Service)
             LMSService(LMS Service)
         end
 
@@ -55,6 +59,7 @@ graph TD
 
     subgraph External Platforms
         Shopify
+        EnterpriseERPHub(Federated Enterprise ERP Hub)
         Wix
         OpenCart
         Stripe
@@ -65,25 +70,33 @@ graph TD
     B --> APIGateway
     C --> APIGateway
 
+    APIGateway --> ShopifyAppService
     APIGateway --> CognitiveService
     APIGateway --> CustomerOrgService
     APIGateway --> EcommBookingService
+    APIGateway --> FederatedERPService
     APIGateway --> LMSService
 
+    ShopifyAppService -- Reads/Writes --> Database
     CognitiveService -- Reads/Writes --> Database
     CustomerOrgService -- Reads/Writes --> Database
     EcommBookingService -- Reads/Writes --> Database
+    FederatedERPService -- Reads/Writes --> Database
     LMSService -- Reads/Writes --> Database
 
+    ShopifyAppService -- Publishes/Subscribes --> EventBus
     CustomerOrgService -- Publishes/Subscribes --> EventBus
     EcommBookingService -- Publishes/Subscribes --> EventBus
+    FederatedERPService -- Publishes/Subscribes --> EventBus
     LMSService -- Publishes/Subscribes --> EventBus
 
+    ShopifyAppService --> Shopify
     EcommBookingService --> Shopify
     EcommBookingService --> Wix
     EcommBookingService --> OpenCart
     EcommBookingService --> Stripe
     EcommBookingService --> QuickBooks
+    FederatedERPService --> EnterpriseERPHub
 ```
 
 ## 5. Service Details
@@ -106,7 +119,16 @@ This service is the heart of the user management system, based on `skintwin-cust
 - **Authentication**: Handling user login, registration, and session management via WorkOS SSO.
 - **Authorization**: Implementing role-based access control (RBAC).
 
-### 5.3. E-commerce & Booking Service
+### 5.3. Shopify App Service
+
+This service is the primary runtime of the ecosystem and makes the platform deployable as a Shopify app. It is responsible for:
+
+- **Embedded App UX**: Rendering merchant-facing admin experiences with Shopify App Bridge.
+- **App Authentication**: Managing OAuth install flow, session tokens, and shop-level tenancy context.
+- **Webhooks/App Proxies**: Handling product/order/customer lifecycle events and storefront proxy requests.
+- **Service Orchestration**: Delegating business capabilities to internal services through the API Gateway.
+
+### 5.4. E-commerce & Booking Service
 
 This service, derived from `skintwin-integrations`, will act as a facade for all external e-commerce and booking platforms. It will provide a unified API to:
 
@@ -115,7 +137,16 @@ This service, derived from `skintwin-integrations`, will act as a facade for all
 - **Manage Bookings**: Synchronize appointments with Wix Bookings.
 - **Process Payments**: Integrate with Stripe and PayStack.
 
-### 5.4. LMS Service
+### 5.5. Federated ERP Service
+
+This service enables enterprise-wide ERP federation without requiring a single monolithic ERP. It will:
+
+- **Federate Domains**: Bridge multiple ERP domains (inventory, procurement, finance, fulfillment) across business units.
+- **Canonical Mapping**: Translate Shopify and internal events into canonical enterprise entities.
+- **Bidirectional Sync**: Support inbound ERP master data updates and outbound transactional posting.
+- **Resilience Controls**: Apply idempotency keys, replay queues, and conflict resolution policies.
+
+### 5.6. LMS Service
 
 Based on `regima-training-lms`, this service will provide a complete learning management solution, including:
 

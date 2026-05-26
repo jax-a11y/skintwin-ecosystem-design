@@ -52,10 +52,46 @@ This repository contains detailed design documents for each architectural layer:
 - [**Frontend Architecture**](./design/frontend_architecture.md)
 - [**Network & API Gateway Architecture**](./design/network_architecture.md)
 
-## 6. Diagrams
+## 6. CI/CD & Testing
 
-All architectural diagrams are available in the `/diagrams` directory:
+This repository also serves as the central source for CI/CD infrastructure and E2E testing specifications across the ecosystem.
 
-- [Ecosystem Architecture Diagram](./diagrams/ecosystem_architecture.png)
-- [Data Flow Diagram](./diagrams/data_flow.png)
-- [Repository Mapping Diagram](./diagrams/repository_mapping.png)
+### 6.1. Reusable GitHub Actions Workflows
+
+The `.github/workflows/` directory contains reusable workflow templates that can be called from any repository:
+
+| Workflow | Purpose |
+|----------|---------|
+| [`ci-node.yml`](./.github/workflows/ci-node.yml) | Node.js/TypeScript build, test, lint |
+| [`ci-python.yml`](./.github/workflows/ci-python.yml) | Python build, test, lint |
+| [`ci-container.yml`](./.github/workflows/ci-container.yml) | Container build and security scan |
+| [`ci-e2e.yml`](./.github/workflows/ci-e2e.yml) | End-to-end test execution |
+| [`ci-release.yml`](./.github/workflows/ci-release.yml) | Release validation and publishing |
+| [`ci-contracts.yml`](./.github/workflows/ci-contracts.yml) | Cross-repo contract validation |
+| [`ci-security.yml`](./.github/workflows/ci-security.yml) | Security scanning (CodeQL, deps, secrets) |
+
+[**Read the CI/CD Standards documentation**](./ci/README.md)
+
+### 6.2. E2E Testing Strategy
+
+The `/e2e/` directory contains comprehensive E2E test specifications:
+
+- [**E2E Strategy Overview**](./e2e/README.md) - Test tiers, execution strategy, reliability engineering
+- [**Shopify App Scenarios**](./e2e/scenarios/shopify-scenarios.md) - Installation, session, webhook tests
+- [**Portal & LMS Scenarios**](./e2e/scenarios/portal-lms-scenarios.md) - Auth, booking, purchase, course tests
+- [**ERP & Events Scenarios**](./e2e/scenarios/erp-events-scenarios.md) - Event propagation, ERP sync tests
+- [**Test Fixtures**](./e2e/fixtures/README.md) - Deterministic test data specifications
+
+### 6.3. Implementation Rollout
+
+The CI/CD and E2E infrastructure is being rolled out in phases:
+
+[**View the Rollout Plan**](./ci/ROLLOUT.md)
+
+## 7. Diagrams
+
+All architectural diagrams are available in the `/design/diagrams` directory:
+
+- [Ecosystem Architecture Diagram](./design/diagrams/ecosystem_architecture.png)
+- [Data Flow Diagram](./design/diagrams/data_flow.png)
+- [Repository Mapping Diagram](./design/diagrams/repository_mapping.png)

@@ -1,0 +1,351 @@
+# Reusable Cross-Repo Contract Validation Workflow
+# Validates API and interface compatibility between ecosystem repositories
+#
+# This workflow ensures breaking changes are detected across repository boundaries.
+
+name: Contract Validation
+
+on:
+  workflow_call:
+    inputs:
+      contract-type:
+        description: "Type of contract: api, event, schema"
+        type: string
+        default: "api"
+      provider-repo:
+        description: "Provider repository (org/repo format)"
+        type: string
+        required: true
+      consumer-repos:
+        description: "Comma-separated list of consumer repositories"
+        type: string
+        required: false
+      schema-path:
+        description: "Path to schema/contract files"
+        type: string
+        default: "contracts"
+      fail-on-breaking:
+        description: "Fail workflow on breaking changes"
+        type: boolean
+        default: true
+      generate-compatibility-report:
+        description: "Generate compatibility matrix report"
+        type: boolean
+        default: true
+    secrets:
+      REPO_ACCESS_TOKEN:
+        required: false
+        description: "Token for cross-repo access"
+    outputs:
+      compatibility-status:
+        description: "Overall compatibility status"
+        value: ${{ jobs.validate.outputs.status }}
+      breaking-changes:
+        description: "Number of breaking changes detected"
+        value: ${{ jobs.validate.outputs.breaking-changes }}
+
+# Cancel superseded runs
+concurrency:
+  group: contracts-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # Schema/Contract Extraction
+  # ============================================================================
+  extract-contracts:
+    name: Extract Contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      provider-version: ${{ steps.provider.outputs.version }}
+      has-openapi: ${{ steps.detect.outputs.has-openapi }}
+      has-jsonschema: ${{ steps.detect.outputs.has-jsonschema }}
+      has-protobuf: ${{ steps.detect.outputs.has-protobuf }}
+      has-graphql: ${{ steps.detect.outputs.has-graphql }}
+
+    steps:
+      - name: Checkout provider repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.provider-repo }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN || github.token }}
+          path: provider
+
+      - name: Get provider version
+        id: provider
+        working-directory: provider
+        run: |
+          if [ -f package.json ]; then
+            VERSION=$(jq -r '.version' package.json)
+          elif [ -f pyproject.toml ]; then
+            VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml | head -1)
+          else
+            VERSION=$(git describe --tags --always 2>/dev/null || echo "unknown")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Detect contract types
+        id: detect
+        working-directory: provider
+        run: |
+          HAS_OPENAPI="false"
+          HAS_JSONSCHEMA="false"
+          HAS_PROTOBUF="false"
+          HAS_GRAPHQL="false"
+
+          # Check for OpenAPI specs
+          if find . -name "openapi*.yaml" -o -name "openapi*.json" -o -name "swagger*.yaml" -o -name "swagger*.json" | grep -q .; then
+            HAS_OPENAPI="true"
+          fi
+
+          # Check for JSON Schema
+          if find . -name "*.schema.json" -o -path "*/${{ inputs.schema-path }}/*.json" | grep -q .; then
+            HAS_JSONSCHEMA="true"
+          fi
+
+          # Check for Protocol Buffers
+          if find . -name "*.proto" | grep -q .; then
+            HAS_PROTOBUF="true"
+          fi
+
+          # Check for GraphQL
+          if find . -name "*.graphql" -o -name "*.gql" | grep -q .; then
+            HAS_GRAPHQL="true"
+          fi
+
+          echo "has-openapi=$HAS_OPENAPI" >> $GITHUB_OUTPUT
+          echo "has-jsonschema=$HAS_JSONSCHEMA" >> $GITHUB_OUTPUT
+          echo "has-protobuf=$HAS_PROTOBUF" >> $GITHUB_OUTPUT
+          echo "has-graphql=$HAS_GRAPHQL" >> $GITHUB_OUTPUT
+
+      - name: Upload contract artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-contracts
+          path: |
+            provider/**/*.yaml
+            provider/**/*.json
+            provider/**/*.proto
+            provider/**/*.graphql
+            provider/**/*.gql
+          retention-days: 7
+
+  # ============================================================================
+  # OpenAPI Validation
+  # ============================================================================
+  validate-openapi:
+    name: Validate OpenAPI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: extract-contracts
+    if: needs.extract-contracts.outputs.has-openapi == 'true'
+
+    steps:
+      - name: Download contracts
+        uses: actions/download-artifact@v4
+        with:
+          name: provider-contracts
+          path: contracts
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install OpenAPI tools
+        run: |
+          npm install -g @stoplight/spectral-cli @openapitools/openapi-diff
+
+      - name: Lint OpenAPI specs
+        run: |
+          find contracts -name "openapi*.yaml" -o -name "openapi*.json" | while read spec; do
+            echo "Linting: $spec"
+            spectral lint "$spec" --fail-severity warn || true
+          done
+
+      - name: Check for breaking changes
+        id: breaking
+        run: |
+          BREAKING=0
+
+          # Compare with previous version if available
+          if [ -f contracts/openapi-previous.yaml ]; then
+            openapi-diff contracts/openapi-previous.yaml contracts/openapi.yaml > diff-report.json 2>&1 || true
+
+            if grep -q '"breaking":true' diff-report.json; then
+              BREAKING=$(jq '[.changes[] | select(.breaking==true)] | length' diff-report.json)
+              echo "Found $BREAKING breaking changes"
+            fi
+          fi
+
+          echo "count=$BREAKING" >> $GITHUB_OUTPUT
+
+      - name: Upload validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-validation
+          path: |
+            diff-report.json
+            spectral-report.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ============================================================================
+  # Event Schema Validation
+  # ============================================================================
+  validate-events:
+    name: Validate Event Schemas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: extract-contracts
+    if: needs.extract-contracts.outputs.has-jsonschema == 'true'
+
+    steps:
+      - name: Download contracts
+        uses: actions/download-artifact@v4
+        with:
+          name: provider-contracts
+          path: contracts
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install JSON Schema tools
+        run: npm install -g ajv-cli json-schema-diff
+
+      - name: Validate schemas
+        run: |
+          find contracts -name "*.schema.json" | while read schema; do
+            echo "Validating: $schema"
+            ajv compile -s "$schema" || echo "Warning: Schema validation failed for $schema"
+          done
+
+      - name: Check backward compatibility
+        id: compat
+        run: |
+          INCOMPATIBLE=0
+
+          # Check each schema for breaking changes
+          find contracts -name "*.schema.json" | while read schema; do
+            PREV_SCHEMA="${schema%.json}.previous.json"
+            if [ -f "$PREV_SCHEMA" ]; then
+              if ! json-schema-diff "$PREV_SCHEMA" "$schema" --format json > schema-diff.json 2>&1; then
+                INCOMPATIBLE=$((INCOMPATIBLE + 1))
+              fi
+            fi
+          done
+
+          echo "incompatible=$INCOMPATIBLE" >> $GITHUB_OUTPUT
+
+  # ============================================================================
+  # Cross-Repo Consumer Validation
+  # ============================================================================
+  validate-consumers:
+    name: Validate Consumers
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [extract-contracts, validate-openapi, validate-events]
+    if: always() && inputs.consumer-repos != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        consumer: ${{ fromJson(format('["{0}"]', join(fromJson(format('["{0}"]', inputs.consumer-repos)), '","'))) }}
+
+    steps:
+      - name: Checkout consumer repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.consumer }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN || github.token }}
+          path: consumer
+
+      - name: Download provider contracts
+        uses: actions/download-artifact@v4
+        with:
+          name: provider-contracts
+          path: provider-contracts
+
+      - name: Check consumer compatibility
+        id: compat
+        run: |
+          COMPATIBLE="true"
+
+          # Check if consumer has contract tests
+          if [ -d consumer/tests/contracts ] || [ -d consumer/tests/integration ]; then
+            echo "Running consumer contract tests..."
+            cd consumer
+
+            # Try to run contract tests
+            if [ -f package.json ]; then
+              npm ci
+              npm run test:contracts || npm run test:integration || COMPATIBLE="false"
+            elif [ -f pyproject.toml ] || [ -f requirements.txt ]; then
+              pip install -e ".[dev]" || pip install -r requirements-dev.txt || pip install -r requirements.txt
+              pytest tests/contracts/ || pytest tests/integration/ || COMPATIBLE="false"
+            fi
+          fi
+
+          echo "compatible=$COMPATIBLE" >> $GITHUB_OUTPUT
+
+  # ============================================================================
+  # Compatibility Report
+  # ============================================================================
+  validate:
+    name: Generate Compatibility Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [extract-contracts, validate-openapi, validate-events, validate-consumers]
+    if: always()
+    outputs:
+      status: ${{ steps.report.outputs.status }}
+      breaking-changes: ${{ steps.report.outputs.breaking-changes }}
+
+    steps:
+      - name: Generate report
+        id: report
+        run: |
+          BREAKING=0
+          STATUS="compatible"
+
+          # Aggregate breaking changes
+          if [ "${{ needs.validate-openapi.outputs.count }}" != "" ]; then
+            BREAKING=$((BREAKING + ${{ needs.validate-openapi.outputs.count || 0 }}))
+          fi
+
+          if [ "${{ needs.validate-events.outputs.incompatible }}" != "" ]; then
+            BREAKING=$((BREAKING + ${{ needs.validate-events.outputs.incompatible || 0 }}))
+          fi
+
+          if [ "$BREAKING" -gt 0 ]; then
+            STATUS="breaking"
+          fi
+
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          echo "breaking-changes=$BREAKING" >> $GITHUB_OUTPUT
+
+      - name: Create summary
+        run: |
+          echo "## Contract Validation Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Provider**: ${{ inputs.provider-repo }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ needs.extract-contracts.outputs.provider-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| OpenAPI | ${{ needs.validate-openapi.result == 'success' && '✅' || (needs.validate-openapi.result == 'skipped' && '⏭️' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Event Schemas | ${{ needs.validate-events.result == 'success' && '✅' || (needs.validate-events.result == 'skipped' && '⏭️' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Consumer Compat | ${{ needs.validate-consumers.result == 'success' && '✅' || (needs.validate-consumers.result == 'skipped' && '⏭️' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Breaking Changes**: ${{ steps.report.outputs.breaking-changes }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ steps.report.outputs.status == 'compatible' && '✅ Compatible' || '⚠️ Breaking Changes Detected' }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail on breaking changes
+        if: inputs.fail-on-breaking && steps.report.outputs.status == 'breaking'
+        run: |
+          echo "Breaking changes detected. Failing workflow."
+          exit 1

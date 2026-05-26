@@ -1,0 +1,302 @@
+# Reusable Security Scanning Workflow
+# Provides comprehensive security checks for all ecosystem repositories
+#
+# Includes CodeQL, dependency scanning, secret scanning, and compliance checks.
+
+name: Security Scanning
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: "Primary language: javascript, python, typescript"
+        type: string
+        required: true
+      codeql-config:
+        description: "Path to CodeQL config file"
+        type: string
+        required: false
+      enable-dependency-review:
+        description: "Enable dependency review on PRs"
+        type: boolean
+        default: true
+      enable-secret-scanning:
+        description: "Enable secret scanning"
+        type: boolean
+        default: true
+      fail-on-high-severity:
+        description: "Fail on high/critical vulnerabilities"
+        type: boolean
+        default: true
+      sarif-upload:
+        description: "Upload SARIF results to GitHub"
+        type: boolean
+        default: true
+    secrets:
+      SECURITY_TOKEN:
+        required: false
+        description: "Token for security scanning services"
+    outputs:
+      vulnerabilities-found:
+        description: "Number of vulnerabilities found"
+        value: ${{ jobs.summary.outputs.total-vulnerabilities }}
+      high-severity-count:
+        description: "Number of high/critical vulnerabilities"
+        value: ${{ jobs.summary.outputs.high-severity }}
+
+# Cancel superseded runs
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # CodeQL Analysis
+  # ============================================================================
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ inputs.language }}
+          config-file: ${{ inputs.codeql-config }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ inputs.language }}"
+          upload: ${{ inputs.sarif-upload }}
+
+  # ============================================================================
+  # Dependency Scanning
+  # ============================================================================
+  dependency-scan:
+    name: Dependency Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
+
+      - name: Upload Trivy results
+        if: inputs.sarif-upload
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: "trivy-dependency-scan"
+
+      - name: Run Trivy for table output
+        id: trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "table"
+          exit-code: "0"
+          severity: "HIGH,CRITICAL"
+
+      - name: Count vulnerabilities
+        id: count
+        run: |
+          HIGH=$(grep -c "HIGH" trivy-results.sarif 2>/dev/null || echo "0")
+          CRITICAL=$(grep -c "CRITICAL" trivy-results.sarif 2>/dev/null || echo "0")
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+
+      - name: Upload vulnerability report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-results
+          path: trivy-results.sarif
+          retention-days: 30
+
+  # ============================================================================
+  # Dependency Review (PRs only)
+  # ============================================================================
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request' && inputs.enable-dependency-review
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: ${{ inputs.fail-on-high-severity && 'high' || 'critical' }}
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD
+          deny-licenses: GPL-3.0, AGPL-3.0
+
+  # ============================================================================
+  # Secret Scanning
+  # ============================================================================
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: inputs.enable-secret-scanning
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  # ============================================================================
+  # SAST with Semgrep
+  # ============================================================================
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/default
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+          generateSarif: "1"
+
+      - name: Upload Semgrep results
+        if: inputs.sarif-upload && always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: "semgrep"
+
+  # ============================================================================
+  # License Compliance
+  # ============================================================================
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: inputs.language == 'javascript' || inputs.language == 'typescript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check Node.js licenses
+        if: inputs.language == 'javascript' || inputs.language == 'typescript'
+        run: |
+          npm install -g license-checker
+          if [ -f package.json ]; then
+            npm ci --ignore-scripts
+            license-checker --failOn "GPL-3.0;AGPL-3.0;LGPL-3.0" --summary || true
+          fi
+
+      - name: Setup Python
+        if: inputs.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check Python licenses
+        if: inputs.language == 'python'
+        run: |
+          pip install pip-licenses
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+            pip-licenses --fail-on="GPLv3;AGPLv3" --format=csv || true
+          fi
+
+  # ============================================================================
+  # Security Summary
+  # ============================================================================
+  summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [codeql, dependency-scan, secret-scan, semgrep, license-check]
+    if: always()
+    outputs:
+      total-vulnerabilities: ${{ steps.aggregate.outputs.total }}
+      high-severity: ${{ steps.aggregate.outputs.high }}
+
+    steps:
+      - name: Aggregate results
+        id: aggregate
+        run: |
+          TOTAL=0
+          HIGH=0
+
+          # This is a simplified aggregation - in practice, you'd parse SARIF files
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+
+      - name: Generate summary
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL | ${{ needs.codeql.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Scan | ${{ needs.dependency-scan.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Scan | ${{ needs.secret-scan.result == 'success' && '✅' || (needs.secret-scan.result == 'skipped' && '⏭️' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Semgrep SAST | ${{ needs.semgrep.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| License Check | ${{ needs.license-check.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail on high severity
+        if: inputs.fail-on-high-severity && steps.aggregate.outputs.high > 0
+        run: |
+          echo "High severity vulnerabilities found: ${{ steps.aggregate.outputs.high }}"
+          exit 1

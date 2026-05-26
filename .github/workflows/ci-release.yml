@@ -1,0 +1,216 @@
+# Reusable Release/Tag Validation Workflow
+# Validates semantic versioning, changelog, and release artifacts
+#
+# This workflow ensures releases follow consistent patterns across the ecosystem.
+
+name: Release Validation
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to validate (if not from tag)"
+        type: string
+        required: false
+      require-changelog:
+        description: "Require CHANGELOG.md entry for version"
+        type: boolean
+        default: true
+      create-github-release:
+        description: "Create GitHub release from tag"
+        type: boolean
+        default: true
+      generate-release-notes:
+        description: "Auto-generate release notes"
+        type: boolean
+        default: true
+    secrets:
+      RELEASE_TOKEN:
+        required: false
+        description: "Token for creating releases (uses GITHUB_TOKEN if not provided)"
+    outputs:
+      version:
+        description: "Validated version"
+        value: ${{ jobs.validate.outputs.version }}
+      is-prerelease:
+        description: "Whether this is a prerelease"
+        value: ${{ jobs.validate.outputs.is-prerelease }}
+
+jobs:
+  # ============================================================================
+  # Version Validation
+  # ============================================================================
+  validate:
+    name: Validate Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          # Get version from input, tag, or package file
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          elif [ -f package.json ]; then
+            VERSION=$(jq -r '.version' package.json)
+          elif [ -f pyproject.toml ]; then
+            VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml | head -1)
+          else
+            echo "Could not determine version"
+            exit 1
+          fi
+
+          # Validate semver format
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$ ]]; then
+            echo "Invalid semver format: $VERSION"
+            exit 1
+          fi
+
+          # Check for prerelease
+          if [[ "$VERSION" =~ -[a-zA-Z] ]]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "Validated version: $VERSION (prerelease: $IS_PRERELEASE)"
+
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+
+          # Check package.json
+          if [ -f package.json ]; then
+            PKG_VERSION=$(jq -r '.version' package.json)
+            if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+              echo "Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)"
+              exit 1
+            fi
+          fi
+
+          # Check pyproject.toml
+          if [ -f pyproject.toml ]; then
+            PYPROJECT_VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml | head -1)
+            if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+              echo "Tag version ($TAG_VERSION) does not match pyproject.toml version ($PYPROJECT_VERSION)"
+              exit 1
+            fi
+          fi
+
+          echo "Version consistency verified"
+
+  # ============================================================================
+  # Changelog Validation
+  # ============================================================================
+  changelog:
+    name: Validate Changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: validate
+    if: inputs.require-changelog
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check changelog entry
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+
+          if [ ! -f CHANGELOG.md ]; then
+            echo "CHANGELOG.md not found"
+            exit 1
+          fi
+
+          # Check for version entry in changelog
+          if ! grep -q "\[${VERSION}\]" CHANGELOG.md && ! grep -q "## ${VERSION}" CHANGELOG.md && ! grep -q "# ${VERSION}" CHANGELOG.md; then
+            echo "No changelog entry found for version $VERSION"
+            echo "Please add a changelog entry before releasing"
+            exit 1
+          fi
+
+          echo "Changelog entry found for version $VERSION"
+
+  # ============================================================================
+  # Create GitHub Release
+  # ============================================================================
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [validate, changelog]
+    if: always() && needs.validate.result == 'success' && inputs.create-github-release && startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+
+          if [ -f CHANGELOG.md ]; then
+            # Extract the section for this version
+            NOTES=$(awk "/^## \[?${VERSION}\]?/,/^## \[?[0-9]/" CHANGELOG.md | head -n -1 | tail -n +2)
+            if [ -z "$NOTES" ]; then
+              NOTES="Release ${VERSION}"
+            fi
+          else
+            NOTES="Release ${VERSION}"
+          fi
+
+          # Write to file to handle multiline
+          echo "$NOTES" > release-notes.md
+          echo "notes-file=release-notes.md" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ needs.validate.outputs.version }}
+          body_path: ${{ steps.changelog.outputs.notes-file }}
+          prerelease: ${{ needs.validate.outputs.is-prerelease }}
+          generate_release_notes: ${{ inputs.generate-release-notes }}
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+  # ============================================================================
+  # Summary
+  # ============================================================================
+  release-summary:
+    name: Release Summary
+    runs-on: ubuntu-latest
+    needs: [validate, changelog, release]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ needs.validate.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prerelease | ${{ needs.validate.outputs.is-prerelease }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version Validation | ${{ needs.validate.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Changelog | ${{ needs.changelog.result == 'success' && '✅' || (needs.changelog.result == 'skipped' && '⏭️ Skipped' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release Created | ${{ needs.release.result == 'success' && '✅' || (needs.release.result == 'skipped' && '⏭️ Skipped' || '❌') }} |" >> $GITHUB_STEP_SUMMARY

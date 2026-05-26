@@ -1,0 +1,273 @@
+# Reusable Container Build & Scan Workflow
+# Used by all services that produce container images
+#
+# This workflow builds, scans, and optionally pushes container images.
+# It includes vulnerability scanning, SBOM generation, and image signing.
+
+name: Container Build & Scan
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        description: "Path to Dockerfile"
+        type: string
+        default: "Dockerfile"
+      context:
+        description: "Docker build context"
+        type: string
+        default: "."
+      image-name:
+        description: "Container image name (without registry)"
+        type: string
+        required: true
+      push:
+        description: "Whether to push the image to registry"
+        type: boolean
+        default: false
+      registry:
+        description: "Container registry URL"
+        type: string
+        default: "ghcr.io"
+      platforms:
+        description: "Target platforms for multi-arch builds"
+        type: string
+        default: "linux/amd64"
+      scan-severity:
+        description: "Minimum severity for vulnerability scan failure"
+        type: string
+        default: "HIGH,CRITICAL"
+    secrets:
+      REGISTRY_USERNAME:
+        required: false
+        description: "Registry username"
+      REGISTRY_PASSWORD:
+        required: false
+        description: "Registry password or token"
+    outputs:
+      image-digest:
+        description: "Image digest"
+        value: ${{ jobs.build.outputs.digest }}
+      image-tag:
+        description: "Image tag"
+        value: ${{ jobs.build.outputs.tag }}
+
+# Cancel superseded runs on the same PR
+concurrency:
+  group: container-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # Dockerfile Lint
+  # ============================================================================
+  lint:
+    name: Dockerfile Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ${{ inputs.dockerfile }}
+          failure-threshold: warning
+
+  # ============================================================================
+  # Build Container Image
+  # ============================================================================
+  build:
+    name: Build Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: lint
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry
+        if: inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME || github.actor }}
+          password: ${{ secrets.REGISTRY_PASSWORD || github.token }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.image-name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=,suffix=,format=short
+
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/image.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-image
+          path: /tmp/image.tar
+          retention-days: 1
+
+  # ============================================================================
+  # Security Scan
+  # ============================================================================
+  scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4.1.3
+        with:
+          name: container-image
+          path: /tmp
+
+      - name: Load image
+        run: docker load -i /tmp/image.tar
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          input: /tmp/image.tar
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: ${{ inputs.scan-severity }}
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Run Trivy for table output
+        uses: aquasecurity/trivy-action@master
+        with:
+          input: /tmp/image.tar
+          format: "table"
+          exit-code: "1"
+          severity: ${{ inputs.scan-severity }}
+
+  # ============================================================================
+  # SBOM Generation
+  # ============================================================================
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build
+
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4.1.3
+        with:
+          name: container-image
+          path: /tmp
+
+      - name: Load image
+        run: docker load -i /tmp/image.tar
+
+      - name: Generate SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          image: /tmp/image.tar
+          artifact-name: sbom-container.spdx.json
+
+  # ============================================================================
+  # Image Signing (for pushed images)
+  # ============================================================================
+  sign:
+    name: Sign Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build, scan]
+    if: inputs.push && needs.scan.result == 'success'
+
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME || github.actor }}
+          password: ${{ secrets.REGISTRY_PASSWORD || github.token }}
+
+      - name: Sign image
+        run: |
+          cosign sign --yes ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.image-name }}@${{ needs.build.outputs.digest }}
+
+  # ============================================================================
+  # Summary
+  # ============================================================================
+  ci-summary:
+    name: Container CI Summary
+    runs-on: ubuntu-latest
+    needs: [lint, build, scan, sbom]
+    if: always()
+
+    steps:
+      - name: Check job results
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "Dockerfile lint failed"
+            exit 1
+          fi
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "Container build failed"
+            exit 1
+          fi
+          if [ "${{ needs.scan.result }}" != "success" ]; then
+            echo "Security scan failed"
+            exit 1
+          fi
+          echo "All container CI checks passed!"
+
+      - name: Generate summary
+        run: |
+          echo "## Container CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Dockerfile Lint | ${{ needs.lint.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.scan.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SBOM | ${{ needs.sbom.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY

@@ -1,6 +1,6 @@
 # SkinTwin-AI Ecosystem Design
 
-This repository contains the comprehensive ecosystem design for the **skintwin-ai** organization. It provides a high-level overview of the integrated architecture, including the backend, frontend, and network layers that connect all repositories into a cohesive and scalable platform.
+This repository contains the comprehensive ecosystem design for the **skintwin-ai** organization. It provides a high-level overview of the integrated architecture, including a Shopify app foundation, backend services, and network layers that connect all repositories into a cohesive and scalable platform with federated enterprise ERP integration.
 
 ## 1. Introduction
 
@@ -14,13 +14,13 @@ The ecosystem is composed of several repositories, each with a specific role. Th
 
 ## 3. High-Level Architecture
 
-The platform is designed around a microservices architecture, with a clear separation between the frontend, backend, and AI/cognitive layers. The following diagram provides a high-level overview of the entire ecosystem:
+The platform is designed around a Shopify-first microservices architecture, with a clear separation between Shopify app surface, backend domain services, and AI/cognitive layers. A federated enterprise-wide ERP integration layer synchronizes master data, orders, inventory, and finance across business units. The following diagram provides a high-level overview of the entire ecosystem:
 
 ![Ecosystem Architecture](./diagrams/ecosystem_architecture.png)
 
 ### 3.1. Frontend Architecture
 
-The frontend layer is built as a monorepo containing three primary applications: the Customer Portal, the Training LMS, and the Business Directory. These applications share a common UI library and design system to ensure a consistent user experience.
+The frontend layer is built as a monorepo containing four primary applications: the Shopify Embedded App, Customer Portal, Training LMS, and Business Directory. These applications share a common UI library and design system to ensure a consistent user experience.
 
 [**Read more about the Frontend Architecture](./design/frontend_architecture.md)**
 
@@ -38,7 +38,7 @@ A secure and scalable network layer connects all the components of the ecosystem
 
 ## 4. Data Flow
 
-The following diagram illustrates the flow of data between the various components of the ecosystem, from user interaction to backend processing and external integrations:
+The following diagram illustrates the flow of data between Shopify app interactions, backend processing, federated ERP synchronization, and external integrations:
 
 ![Data Flow Diagram](./diagrams/data_flow.png)
 

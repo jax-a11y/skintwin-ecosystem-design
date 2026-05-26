@@ -22,12 +22,19 @@ The API Gateway is a critical component of the architecture, serving as the sing
 - **Logging and Monitoring**: Logging all requests and responses for monitoring, auditing, and debugging purposes.
 - **SSL Termination**: Terminating SSL connections and encrypting traffic to the backend services.
 
+For Shopify deployment, the gateway also fronts:
+- **Shopify App Endpoints**: OAuth install/callback, embedded app session verification, and App Bridge token exchange.
+- **Webhook Ingress**: Verified Shopify webhook intake endpoints with signature validation and async queue handoff.
+- **App Proxy Routes**: Controlled storefront extension endpoints exposed through Shopify app proxies.
+
 ## 4. Service-to-Service Communication
 
 Communication between services within the private subnet will be handled through a combination of synchronous and asynchronous mechanisms.
 
 - **Synchronous Communication**: For direct, request/response style communication, services will communicate with each other via their internal REST or gRPC APIs.
 - **Asynchronous Communication**: For event-driven communication, services will use the Event Bus (RabbitMQ or Kafka) to publish and subscribe to events.
+
+Federated ERP connectors consume and emit these events to synchronize enterprise-wide data domains (catalog, inventory, order, procurement, and finance) across multiple ERP systems.
 
 ## 5. Service Discovery
 

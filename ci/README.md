@@ -64,6 +64,8 @@ jobs:
     with:
       node-version: "20"
       package-manager: "pnpm"
+      # pnpm version comes from the repo's package.json "packageManager" field;
+      # set pnpm-version explicitly only if that field is absent.
       coverage-threshold: 80
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/schemas/ecosystem-manifest.schema.json",
+  "title": "SkinTwin Ecosystem Manifest",
+  "description": "Machine-readable declaration of a repository's place in the SkinTwin-AI ecosystem. Lives at .skintwin/manifest.json in each repo; the aggregate registry lives in jax-a11y/skintwin-ecosystem-design at registry/ecosystem.json.",
+  "type": "object",
+  "required": [
+    "manifestVersion",
+    "github",
+    "layer",
+    "role",
+    "description"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "manifestVersion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "github": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "layer": {
+      "type": "string",
+      "enum": [
+        "business-apps",
+        "cognitive",
+        "commerce-runtime",
+        "commerce-surface",
+        "dev-tooling",
+        "erp-federation",
+        "governance",
+        "integration",
+        "marketing",
+        "ml-training",
+        "observability"
+      ]
+    },
+    "role": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "designAlias": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Name this repo goes by in the original skintwin-ai design documents, if any"
+    },
+    "gatewayPrefix": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "API Gateway path prefix this repo serves, if it provides a routed service"
+    },
+    "provides": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Contract ids (see registry contracts[]) this repo provides"
+    },
+    "consumes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Contract ids this repo consumes"
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "publishes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subscribes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workflows": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "usesReusable": {
+          "type": "boolean",
+          "description": "True if CI calls the reusable workflows in jax-a11y/skintwin-ecosystem-design"
+        }
+      }
+    },
+    "registry": {
+      "type": "string",
+      "description": "URL of the aggregate ecosystem registry"
+    }
+  }
+}

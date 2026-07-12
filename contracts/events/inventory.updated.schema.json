@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/contracts/events/inventory.updated.schema.json",
+  "title": "Payload for inventory.updated",
+  "description": "Publishers: rzonedevops/skinsource-pro, jax-a11y/skintwin-integration-hub. Subscribers: jax-a11y/skintwin-asi, rzonedevops/regima-salon-suite. Wrap in the standard envelope (envelope.schema.json).",
+  "type": "object",
+  "required": [
+    "sku"
+  ],
+  "properties": {
+    "sku": {
+      "type": "string"
+    },
+    "warehouseId": {
+      "type": "string"
+    },
+    "previousQuantity": {
+      "type": "integer"
+    },
+    "newQuantity": {
+      "type": "integer"
+    }
+  },
+  "additionalProperties": true
+}

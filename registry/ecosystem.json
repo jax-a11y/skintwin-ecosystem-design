@@ -358,9 +358,9 @@
       },
       "ci": {
         "workflows": [
-          "ci.yml (caller -> reusable ci-python.yml @ jax-a11y/skintwin-ecosystem-design)"
+          "ci.yml (local: ruff, mypy, pytest; vendored pending org allowlist of hub reusable workflows)"
         ],
-        "usesReusable": true
+        "usesReusable": false
       },
       "gatewayPrefix": null
     },
@@ -424,9 +424,9 @@
       },
       "ci": {
         "workflows": [
-          "ci.yml (caller -> reusable ci-node.yml @ jax-a11y/skintwin-ecosystem-design)"
+          "ci.yml (local: npm ci, informational typecheck, build; vendored pending org allowlist of hub reusable workflows)"
         ],
-        "usesReusable": true
+        "usesReusable": false
       },
       "gatewayPrefix": "/api/lms/*"
     },
@@ -446,9 +446,9 @@
       },
       "ci": {
         "workflows": [
-          "ci.yml (caller -> reusable ci-node.yml @ jax-a11y/skintwin-ecosystem-design)"
+          "ci.yml (local: npm ci, informational typecheck, build; vendored pending org allowlist of hub reusable workflows)"
         ],
-        "usesReusable": true
+        "usesReusable": false
       },
       "gatewayPrefix": null
     },

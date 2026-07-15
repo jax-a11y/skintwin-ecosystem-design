@@ -527,9 +527,9 @@
       },
       "ci": {
         "workflows": [
-          "ci.yml (caller -> reusable ci-node.yml @ jax-a11y/skintwin-ecosystem-design)"
+          "ci.yml (local: pnpm install, typecheck, informational vitest, build; vendored pending org allowlist of hub reusable workflows)"
         ],
-        "usesReusable": true
+        "usesReusable": false
       },
       "gatewayPrefix": null
     },
@@ -689,9 +689,9 @@
       },
       "ci": {
         "workflows": [
-          "ci.yml (caller -> reusable ci-node.yml @ jax-a11y/skintwin-ecosystem-design)"
+          "ci.yml (local: pnpm install, typecheck, build; vendored pending org allowlist of hub reusable workflows)"
         ],
-        "usesReusable": true
+        "usesReusable": false
       },
       "gatewayPrefix": null
     },

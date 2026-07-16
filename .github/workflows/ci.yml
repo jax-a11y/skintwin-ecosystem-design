@@ -73,20 +73,38 @@ jobs:
           node-version: "20"
 
       - name: Install schema tools
-        run: npm install -g ajv-cli
+        run: python3 -m pip install --user jsonschema
 
       - name: Validate ecosystem manifest schema
         id: compile-schema
         run: |
           echo "Validating ecosystem-manifest schema..."
-          ajv compile -s schemas/ecosystem-manifest.schema.json
+          python3 - <<'PY'
+          import json
+          from jsonschema import Draft202012Validator
+
+          with open("schemas/ecosystem-manifest.schema.json", "r", encoding="utf-8") as f:
+              schema = json.load(f)
+
+          Draft202012Validator.check_schema(schema)
+          print("Schema is valid ✅")
+          PY
 
       - name: Validate .skintwin/manifest.json against schema
         id: validate-manifest
         run: |
-          ajv validate \
-            -s schemas/ecosystem-manifest.schema.json \
-            -d .skintwin/manifest.json
+          python3 - <<'PY'
+          import json
+          from jsonschema import Draft202012Validator
+
+          with open("schemas/ecosystem-manifest.schema.json", "r", encoding="utf-8") as f:
+              schema = json.load(f)
+          with open(".skintwin/manifest.json", "r", encoding="utf-8") as f:
+              manifest = json.load(f)
+
+          Draft202012Validator(schema).validate(manifest)
+          print("Manifest is valid ✅")
+          PY
 
       - name: Validate event contract schemas
         id: validate-events
@@ -95,7 +113,17 @@ jobs:
           ERRORS=0
           for schema in contracts/events/*.schema.json; do
             echo "  Checking: $schema"
-            if ! ajv compile -s "$schema"; then
+            if ! python3 - "$schema" <<'PY'; then
+import json
+import sys
+from jsonschema import Draft202012Validator
+
+schema_path = sys.argv[1]
+with open(schema_path, "r", encoding="utf-8") as f:
+    schema = json.load(f)
+Draft202012Validator.check_schema(schema)
+print(f"{schema_path} is valid ✅")
+PY
               echo "::error file=$schema::Schema compilation failed"
               ERRORS=$((ERRORS + 1))
             fi

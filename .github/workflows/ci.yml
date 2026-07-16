@@ -73,7 +73,7 @@ jobs:
           node-version: "20"
 
       - name: Install schema tools
-        run: python3 -m pip install --user jsonschema
+        run: python3 -m pip install jsonschema
 
       - name: Validate ecosystem manifest schema
         id: compile-schema

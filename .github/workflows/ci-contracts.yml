@@ -17,7 +17,7 @@ on:
         type: string
         required: true
       consumer-repos:
-        description: "Comma-separated list of consumer repositories"
+        description: "JSON array of consumer repositories, e.g. '[\"org/repo-a\",\"org/repo-b\"]'"
         type: string
         required: false
       schema-path:
@@ -252,7 +252,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        consumer: ${{ fromJson(format('["{0}"]', join(fromJson(format('["{0}"]', inputs.consumer-repos)), '","'))) }}
+        consumer: ${{ fromJson(inputs.consumer-repos) }}
 
     steps:
       - name: Checkout consumer repo

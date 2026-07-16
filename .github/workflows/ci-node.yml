@@ -80,7 +80,7 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: ${{ inputs.package-manager }}
-          cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ inputs.package-manager == 'pnpm' && 'pnpm-lock.yaml' || (inputs.package-manager == 'yarn' && 'yarn.lock' || 'package-lock.json') }}
 
       - name: Install dependencies
         working-directory: ${{ inputs.working-directory }}
@@ -150,7 +150,7 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: ${{ inputs.package-manager }}
-          cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ inputs.package-manager == 'pnpm' && 'pnpm-lock.yaml' || (inputs.package-manager == 'yarn' && 'yarn.lock' || 'package-lock.json') }}
 
       - name: Install dependencies
         working-directory: ${{ inputs.working-directory }}
@@ -230,7 +230,7 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: ${{ inputs.package-manager }}
-          cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ inputs.package-manager == 'pnpm' && 'pnpm-lock.yaml' || (inputs.package-manager == 'yarn' && 'yarn.lock' || 'package-lock.json') }}
 
       - name: Install dependencies
         working-directory: ${{ inputs.working-directory }}
@@ -299,7 +299,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: ${{ inputs.package-manager }}
-          cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ inputs.package-manager == 'pnpm' && 'pnpm-lock.yaml' || (inputs.package-manager == 'yarn' && 'yarn.lock' || 'package-lock.json') }}
 
       - name: Install dependencies
         working-directory: ${{ inputs.working-directory }}

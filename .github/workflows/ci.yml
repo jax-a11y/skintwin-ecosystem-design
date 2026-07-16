@@ -76,18 +76,20 @@ jobs:
         run: npm install -g ajv-cli
 
       - name: Validate ecosystem manifest schema
+        id: compile-schema
         run: |
           echo "Validating ecosystem-manifest schema..."
           ajv compile -s schemas/ecosystem-manifest.schema.json
 
       - name: Validate .skintwin/manifest.json against schema
+        id: validate-manifest
         run: |
           ajv validate \
             -s schemas/ecosystem-manifest.schema.json \
-            -d .skintwin/manifest.json \
-            || echo "::warning::Manifest validation failed"
+            -d .skintwin/manifest.json
 
       - name: Validate event contract schemas
+        id: validate-events
         run: |
           echo "Validating event contract schemas..."
           ERRORS=0
@@ -105,6 +107,7 @@ jobs:
           echo "All schemas valid ✅"
 
       - name: Validate ecosystem registry
+        id: validate-registry
         run: |
           echo "Checking registry/ecosystem.json is valid JSON..."
           python3 -c "import json, sys; json.load(open('registry/ecosystem.json'))" \
@@ -118,10 +121,10 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Artifact | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Ecosystem Manifest Schema | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| .skintwin/manifest.json | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Event Contract Schemas | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Ecosystem Registry JSON | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ecosystem Manifest Schema | ${{ steps.compile-schema.outcome == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| .skintwin/manifest.json | ${{ steps.validate-manifest.outcome == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Event Contract Schemas | ${{ steps.validate-events.outcome == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ecosystem Registry JSON | ${{ steps.validate-registry.outcome == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # Lint documentation and markdown
@@ -161,7 +164,7 @@ jobs:
           # Check markdown links to local files
           for md in $(find . -name "*.md" -not -path "./.git/*"); do
             # Extract local file references [text](path) excluding http/https
-            grep -oP '\[.*?\]\(\K[^)]+' "$md" 2>/dev/null | grep -v '^http' | grep -v '^#' | while read -r ref; do
+            while IFS= read -r ref; do
               # Strip anchor fragments
               FILE_PATH=$(echo "$ref" | cut -d'#' -f1)
               if [ -n "$FILE_PATH" ]; then
@@ -173,7 +176,7 @@ jobs:
                   ERRORS=$((ERRORS + 1))
                 fi
               fi
-            done
+            done < <(grep -oP '\[.*?\]\(\K[^)]+' "$md" 2>/dev/null | grep -v '^http' | grep -v '^#')
           done
 
           if [ "$ERRORS" -gt 0 ]; then

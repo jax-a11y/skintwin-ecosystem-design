@@ -114,16 +114,16 @@ jobs:
           for schema in contracts/events/*.schema.json; do
             echo "  Checking: $schema"
             if ! python3 - "$schema" <<'PY'; then
-import json
-import sys
-from jsonschema import Draft202012Validator
+          import json
+          import sys
+          from jsonschema import Draft202012Validator
 
-schema_path = sys.argv[1]
-with open(schema_path, "r", encoding="utf-8") as f:
-    schema = json.load(f)
-Draft202012Validator.check_schema(schema)
-print(f"{schema_path} is valid ✅")
-PY
+          schema_path = sys.argv[1]
+          with open(schema_path, "r", encoding="utf-8") as f:
+              schema = json.load(f)
+          Draft202012Validator.check_schema(schema)
+          print(f"{schema_path} is valid ✅")
+          PY
               echo "::error file=$schema::Schema compilation failed"
               ERRORS=$((ERRORS + 1))
             fi

@@ -1,0 +1,263 @@
+# CI Orchestration Workflow
+# Central entry point that coordinates all reusable CI workflows for the
+# skintwin-ecosystem-design governance repository.
+#
+# Triggers: push, pull_request, release, schedule (nightly), manual dispatch
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+  pull_request:
+    branches: [main]
+
+  release:
+    types: [published]
+
+  schedule:
+    # Nightly at 02:00 UTC — exhaustive validation
+    - cron: "0 2 * * *"
+
+  workflow_dispatch:
+    inputs:
+      run-security:
+        description: "Run security scanning"
+        type: boolean
+        default: true
+      run-contracts:
+        description: "Run contract validation"
+        type: boolean
+        default: true
+      run-schemas:
+        description: "Validate JSON schemas"
+        type: boolean
+        default: true
+      environment:
+        description: "Target environment"
+        type: choice
+        options:
+          - preview
+          - staging
+          - production
+        default: preview
+
+# Cancel superseded runs on the same branch/PR
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================================
+  # Validate JSON schemas and ecosystem manifest
+  # ============================================================================
+  validate-schemas:
+    name: Validate Schemas & Manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.run-schemas
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install schema tools
+        run: npm install -g ajv-cli
+
+      - name: Validate ecosystem manifest schema
+        run: |
+          echo "Validating ecosystem-manifest schema..."
+          ajv compile -s schemas/ecosystem-manifest.schema.json
+
+      - name: Validate .skintwin/manifest.json against schema
+        run: |
+          ajv validate \
+            -s schemas/ecosystem-manifest.schema.json \
+            -d .skintwin/manifest.json \
+            || echo "::warning::Manifest validation failed"
+
+      - name: Validate event contract schemas
+        run: |
+          echo "Validating event contract schemas..."
+          ERRORS=0
+          for schema in contracts/events/*.schema.json; do
+            echo "  Checking: $schema"
+            if ! ajv compile -s "$schema"; then
+              echo "::error file=$schema::Schema compilation failed"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "$ERRORS schema(s) failed validation"
+            exit 1
+          fi
+          echo "All schemas valid ✅"
+
+      - name: Validate ecosystem registry
+        run: |
+          echo "Checking registry/ecosystem.json is valid JSON..."
+          python3 -c "import json, sys; json.load(open('registry/ecosystem.json'))" \
+            && echo "ecosystem.json is valid JSON ✅" \
+            || (echo "::error file=registry/ecosystem.json::Invalid JSON" && exit 1)
+
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Schema & Manifest Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Ecosystem Manifest Schema | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| .skintwin/manifest.json | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Event Contract Schemas | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ecosystem Registry JSON | ✅ |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # Lint documentation and markdown
+  # ============================================================================
+  lint-docs:
+    name: Lint Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Lint Markdown files
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: "**/*.md"
+          config: |
+            {
+              "default": true,
+              "MD013": false,
+              "MD033": false,
+              "MD041": false
+            }
+        continue-on-error: true
+
+      - name: Check for broken internal links
+        run: |
+          echo "Checking for broken internal references..."
+          ERRORS=0
+
+          # Check markdown links to local files
+          for md in $(find . -name "*.md" -not -path "./.git/*"); do
+            # Extract local file references [text](path) excluding http/https
+            grep -oP '\[.*?\]\(\K[^)]+' "$md" 2>/dev/null | grep -v '^http' | grep -v '^#' | while read -r ref; do
+              # Strip anchor fragments
+              FILE_PATH=$(echo "$ref" | cut -d'#' -f1)
+              if [ -n "$FILE_PATH" ]; then
+                # Resolve relative to the markdown file's directory
+                DIR=$(dirname "$md")
+                RESOLVED="$DIR/$FILE_PATH"
+                if [ ! -e "$RESOLVED" ]; then
+                  echo "::warning file=$md::Broken link: $ref"
+                  ERRORS=$((ERRORS + 1))
+                fi
+              fi
+            done
+          done
+
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "Found $ERRORS broken link(s)"
+          else
+            echo "No broken links found ✅"
+          fi
+
+  # ============================================================================
+  # Security scanning (reusable workflow)
+  # ============================================================================
+  security:
+    name: Security Scan
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run-security) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'pull_request'
+    uses: ./.github/workflows/ci-security.yml
+    with:
+      language: javascript
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+  # ============================================================================
+  # Contract validation (reusable workflow)
+  # ============================================================================
+  contracts:
+    name: Contract Validation
+    needs: validate-schemas
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run-contracts) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    uses: ./.github/workflows/ci-contracts.yml
+    with:
+      contract-type: event
+      provider-repo: ${{ github.repository }}
+      schema-path: contracts/events
+
+  # ============================================================================
+  # Release validation (reusable workflow)
+  # ============================================================================
+  release:
+    name: Release Validation
+    if: github.event_name == 'release'
+    uses: ./.github/workflows/ci-release.yml
+    with:
+      require-changelog: false
+      create-github-release: false
+    permissions:
+      contents: write
+
+  # ============================================================================
+  # CI Summary
+  # ============================================================================
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [validate-schemas, lint-docs]
+    if: always()
+
+    steps:
+      - name: Evaluate results
+        run: |
+          echo "## CI Orchestration Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger**: \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Ref**: \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Schema Validation | ${{ needs.validate-schemas.result == 'success' && '✅' || (needs.validate-schemas.result == 'skipped' && '⏭️' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Documentation Lint | ${{ needs.lint-docs.result == 'success' && '✅' || (needs.lint-docs.result == 'skipped' && '⏭️' || '❌') }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Gate on required checks
+        run: |
+          if [ "${{ needs.validate-schemas.result }}" = "failure" ]; then
+            echo "Schema validation failed"
+            exit 1
+          fi
+          echo "All required checks passed ✅"

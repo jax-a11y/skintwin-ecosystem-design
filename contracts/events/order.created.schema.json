@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/contracts/events/order.created.schema.json",
+  "title": "Payload for order.created",
+  "description": "Publishers: jax-a11y/skintwin-integration-hub. Subscribers: jax-a11y/skintwin-customer-portal. Wrap in the standard envelope (envelope.schema.json).",
+  "type": "object",
+  "required": [
+    "orderId"
+  ],
+  "properties": {
+    "orderId": {
+      "type": "string"
+    },
+    "sourceOrderId": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string"
+    },
+    "customerId": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

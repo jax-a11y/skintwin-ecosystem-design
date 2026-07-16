@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/schemas/ecosystem-manifest.schema.json",
+  "manifestVersion": "1.0",
+  "github": "jax-a11y/skintwin-ecosystem-design",
+  "layer": "governance",
+  "role": "design-docs",
+  "description": "Central architecture hub: ecosystem design docs, live registry, event contracts, reusable CI workflows, E2E specs.",
+  "designAlias": "skintwin-ecosystem-design",
+  "gatewayPrefix": null,
+  "provides": [
+    "event-contracts",
+    "reusable-ci"
+  ],
+  "consumes": [],
+  "events": {
+    "publishes": [],
+    "subscribes": []
+  },
+  "ci": {
+    "workflows": [
+      "7 reusable workflow_call templates (ci-node, ci-python, ci-e2e, ci-contracts, ci-security, ci-container, ci-release)"
+    ],
+    "usesReusable": false
+  },
+  "registry": "https://github.com/jax-a11y/skintwin-ecosystem-design/blob/main/registry/ecosystem.json"
+}

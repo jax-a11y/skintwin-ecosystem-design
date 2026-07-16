@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/contracts/events/user.created.schema.json",
+  "title": "Payload for user.created",
+  "description": "Publishers: jax-a11y/skintwin-customer-portal. Subscribers: rzonedevops/regima-training-lms, jax-a11y/skintwin-integration-hub. Wrap in the standard envelope (envelope.schema.json).",
+  "type": "object",
+  "required": [
+    "userId"
+  ],
+  "properties": {
+    "userId": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "organizationId": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

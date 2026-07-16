@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/contracts/events/certification.awarded.schema.json",
+  "title": "Payload for certification.awarded",
+  "description": "Publishers: rzonedevops/regima-training-lms. Subscribers: jax-a11y/skintwin-customer-portal. Wrap in the standard envelope (envelope.schema.json).",
+  "type": "object",
+  "required": [
+    "userId",
+    "certificationId"
+  ],
+  "properties": {
+    "userId": {
+      "type": "string"
+    },
+    "certificationId": {
+      "type": "string"
+    },
+    "awardedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": true
+}

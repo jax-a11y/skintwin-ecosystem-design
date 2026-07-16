@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/contracts/events/product.updated.schema.json",
+  "title": "Payload for product.updated",
+  "description": "Publishers: jax-a11y/skintwin-integration-hub. Subscribers: jax-a11y/skintwin-asi, jax-a11y/skintwin-marketplaces-buyer-app. Wrap in the standard envelope (envelope.schema.json).",
+  "type": "object",
+  "required": [
+    "productId",
+    "sku"
+  ],
+  "properties": {
+    "productId": {
+      "type": "string"
+    },
+    "sku": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

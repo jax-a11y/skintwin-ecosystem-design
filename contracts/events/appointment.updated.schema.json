@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/contracts/events/appointment.updated.schema.json",
+  "title": "Payload for appointment.updated",
+  "description": "Publishers: jax-a11y/skintwin-integration-hub. Subscribers: jax-a11y/skintwin-customer-portal. Wrap in the standard envelope (envelope.schema.json).",
+  "type": "object",
+  "required": [
+    "appointmentId"
+  ],
+  "properties": {
+    "appointmentId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

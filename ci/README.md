@@ -60,16 +60,18 @@ on:
 
 jobs:
   ci:
-    uses: skintwin-ai/skintwin-ecosystem-design/.github/workflows/ci-node.yml@main
+    uses: jax-a11y/skintwin-ecosystem-design/.github/workflows/ci-node.yml@main
     with:
       node-version: "20"
       package-manager: "pnpm"
+      # pnpm version comes from the repo's package.json "packageManager" field;
+      # set pnpm-version explicitly only if that field is absent.
       coverage-threshold: 80
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   security:
-    uses: skintwin-ai/skintwin-ecosystem-design/.github/workflows/ci-security.yml@main
+    uses: jax-a11y/skintwin-ecosystem-design/.github/workflows/ci-security.yml@main
     with:
       language: typescript
 ```
@@ -87,7 +89,7 @@ on:
 
 jobs:
   ci:
-    uses: skintwin-ai/skintwin-ecosystem-design/.github/workflows/ci-python.yml@main
+    uses: jax-a11y/skintwin-ecosystem-design/.github/workflows/ci-python.yml@main
     with:
       python-version: "3.11"
       enable-jax: true  # For AI/ML repos
@@ -96,7 +98,7 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   security:
-    uses: skintwin-ai/skintwin-ecosystem-design/.github/workflows/ci-security.yml@main
+    uses: jax-a11y/skintwin-ecosystem-design/.github/workflows/ci-security.yml@main
     with:
       language: python
 ```
@@ -298,10 +300,10 @@ Reference reusable workflows by tag or commit:
 
 ```yaml
 # For production stability
-uses: skintwin-ai/skintwin-ecosystem-design/.github/workflows/ci-node.yml@v1.0.0
+uses: jax-a11y/skintwin-ecosystem-design/.github/workflows/ci-node.yml@v1.0.0
 
 # For development/testing
-uses: skintwin-ai/skintwin-ecosystem-design/.github/workflows/ci-node.yml@main
+uses: jax-a11y/skintwin-ecosystem-design/.github/workflows/ci-node.yml@main
 ```
 
 ## 11. Monitoring and Observability

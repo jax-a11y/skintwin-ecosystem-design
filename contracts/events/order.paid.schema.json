@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/contracts/events/order.paid.schema.json",
+  "title": "Payload for order.paid",
+  "description": "Publishers: jax-a11y/skintwin-integration-hub. Subscribers: jax-a11y/skintwin-customer-portal, rzonedevops/skinsource-pro. Wrap in the standard envelope (envelope.schema.json).",
+  "type": "object",
+  "required": [
+    "orderId"
+  ],
+  "properties": {
+    "orderId": {
+      "type": "string"
+    },
+    "paymentRef": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

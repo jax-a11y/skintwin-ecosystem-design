@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/contracts/events/course.completed.schema.json",
+  "title": "Payload for course.completed",
+  "description": "Publishers: rzonedevops/regima-training-lms. Subscribers: jax-a11y/skintwin-customer-portal. Wrap in the standard envelope (envelope.schema.json).",
+  "type": "object",
+  "required": [
+    "userId",
+    "courseId"
+  ],
+  "properties": {
+    "userId": {
+      "type": "string"
+    },
+    "courseId": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": true
+}

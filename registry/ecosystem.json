@@ -1,0 +1,759 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-07-12",
+  "source": "jax-a11y/skintwin-ecosystem-design",
+  "manifestSchema": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/schemas/ecosystem-manifest.schema.json",
+  "description": "Live registry of the SkinTwin-AI ecosystem. Maps every active repository to its architectural layer, role, contracts, and events. Each repo carries its own copy at .skintwin/manifest.json.",
+  "layers": {
+    "governance": "Architecture, contracts, CI/CD standards, and design documentation",
+    "cognitive": "AI/cognitive services: neuro-symbolic reasoning, skin models, agents (Alchemist Engine spec)",
+    "business-apps": "Business domain services: customer & org management, LMS",
+    "commerce-runtime": "Shopify app surfaces: embedded admin apps, operator dashboards, marketplace channel",
+    "commerce-surface": "Customer-facing storefronts and buyer frontends",
+    "integration": "Platform connectors, unified data models, webhook routing, API gateway",
+    "erp-federation": "Federated enterprise data: procurement, supplier intelligence, inventory/finance sync",
+    "ml-training": "Model and content training pipelines",
+    "observability": "Dashboards and monitoring of the cognitive/business stack",
+    "marketing": "Brand sites and static archives",
+    "dev-tooling": "Developer/orchestration tooling for the ecosystem"
+  },
+  "contracts": [
+    {
+      "id": "cognitive-api",
+      "type": "rest",
+      "pathPrefix": "/api/cognitive/*",
+      "provider": "rzonedevops/neuro-symbolic-core",
+      "consumers": [
+        "jax-a11y/skintwin-customer-portal",
+        "rzonedevops/regima-training-lms",
+        "jax-a11y/skintwin-asi",
+        "rzonedevops/regima-cognitive-dashboard"
+      ],
+      "description": "Skin analysis, recommendations, personalization from the neuro-symbolic cognitive layer"
+    },
+    {
+      "id": "integration-api",
+      "type": "rest",
+      "pathPrefix": "/api/integrations/*",
+      "provider": "jax-a11y/skintwin-integration-hub",
+      "consumers": [
+        "jax-a11y/skintwin-salon",
+        "jax-a11y/skintwin-customer-portal",
+        "rzonedevops/regima-training-lms",
+        "rzonedevops/regima-salon-suite",
+        "jax-a11y/skintwin-ordering-agent"
+      ],
+      "description": "Unified gateway to Wix/OpenCart/Shopify B2B: health, sync (appointments/clients/products), B2B companies"
+    },
+    {
+      "id": "user-api",
+      "type": "rest",
+      "pathPrefix": "/api/users/*",
+      "provider": "jax-a11y/skintwin-customer-portal",
+      "consumers": [
+        "rzonedevops/regima-training-lms",
+        "rzonedevops/regima-salon-suite"
+      ],
+      "description": "Users, organizations, tenants, roles (Customer & Org Service); issues JWTs validated at the gateway"
+    },
+    {
+      "id": "lms-api",
+      "type": "rest",
+      "pathPrefix": "/api/lms/*",
+      "provider": "rzonedevops/regima-training-lms",
+      "consumers": [
+        "jax-a11y/skintwin-customer-portal",
+        "rzonedevops/regima-train-nnllms"
+      ],
+      "description": "Courses, enrollment, progress, certification; xAPI/SCORM/LTI interop"
+    },
+    {
+      "id": "procurement-api",
+      "type": "rest",
+      "pathPrefix": "/api/erp/* (ERP federation domain)",
+      "provider": "rzonedevops/skinsource-pro",
+      "consumers": [
+        "jax-a11y/skintwin-workbench",
+        "jax-a11y/skintwin-asi"
+      ],
+      "description": "Ingredient sourcing, suppliers, RFQ procurement lifecycle \u2014 concrete procurement domain of the Federated ERP layer"
+    },
+    {
+      "id": "supplier-dataset",
+      "type": "dataset",
+      "pathPrefix": null,
+      "provider": "rzonedevops/pcsdbx1",
+      "consumers": [
+        "rzonedevops/skinsource-pro"
+      ],
+      "description": "~1,316 curated supplier-intelligence JSON listings (schema v1.0) for cosmetics manufacturing"
+    },
+    {
+      "id": "marketplace-admin-graphql",
+      "type": "graphql",
+      "pathPrefix": "/graphql",
+      "provider": "jax-a11y/skintwin-marketplace-admin-app",
+      "consumers": [
+        "jax-a11y/skintwin-marketplaces-buyer-app"
+      ],
+      "description": "Apollo GraphQL BFF for the marketplace channel (shops, products, orders)"
+    },
+    {
+      "id": "alchemist-engine-spec",
+      "type": "spec",
+      "pathPrefix": null,
+      "provider": "jax-a11y/skintwin-workbench",
+      "consumers": [
+        "jax-a11y/skintwin-asi",
+        "rzonedevops/neuro-symbolic-core",
+        "rzonedevops/skin7nn"
+      ],
+      "description": "Alchemist Engine cognitive architecture spec and MRP/workbench OpenAPI contracts"
+    },
+    {
+      "id": "event-contracts",
+      "type": "schema",
+      "pathPrefix": "contracts/events/",
+      "provider": "jax-a11y/skintwin-ecosystem-design",
+      "consumers": [
+        "*"
+      ],
+      "description": "JSON Schemas for the ecosystem event envelope and core topics"
+    },
+    {
+      "id": "reusable-ci",
+      "type": "ci",
+      "pathPrefix": ".github/workflows/",
+      "provider": "jax-a11y/skintwin-ecosystem-design",
+      "consumers": [
+        "*"
+      ],
+      "description": "Reusable workflow_call CI templates: ci-node, ci-python, ci-e2e, ci-contracts, ci-security, ci-container, ci-release"
+    }
+  ],
+  "events": {
+    "envelope": "contracts/events/envelope.schema.json",
+    "conventions": "Dot-separated lowercase entity.pastTenseVerb (user.created, order.placed); service-namespaced for service-emitted outcomes (lms.user.provisioned, erp.product.synced). Envelope: {id: evt_<unique> idempotency key, type, payload (camelCase), partitionKey}. Retry with retryCount, DLQ at /api/events/dlq, ordering per partitionKey.",
+    "topics": {
+      "user.created": {
+        "publishers": [
+          "jax-a11y/skintwin-customer-portal"
+        ],
+        "subscribers": [
+          "rzonedevops/regima-training-lms",
+          "jax-a11y/skintwin-integration-hub"
+        ],
+        "payloadSchema": "contracts/events/user.created.schema.json"
+      },
+      "order.placed": {
+        "publishers": [
+          "jax-a11y/skintwin-salon",
+          "jax-a11y/skintwin-ordering-agent"
+        ],
+        "subscribers": [
+          "jax-a11y/skintwin-customer-portal",
+          "jax-a11y/skintwin-integration-hub"
+        ],
+        "payloadSchema": "contracts/events/order.placed.schema.json"
+      },
+      "order.created": {
+        "publishers": [
+          "jax-a11y/skintwin-integration-hub"
+        ],
+        "subscribers": [
+          "jax-a11y/skintwin-customer-portal"
+        ],
+        "payloadSchema": "contracts/events/order.created.schema.json"
+      },
+      "order.paid": {
+        "publishers": [
+          "jax-a11y/skintwin-integration-hub"
+        ],
+        "subscribers": [
+          "jax-a11y/skintwin-customer-portal",
+          "rzonedevops/skinsource-pro"
+        ],
+        "payloadSchema": "contracts/events/order.paid.schema.json"
+      },
+      "product.updated": {
+        "publishers": [
+          "jax-a11y/skintwin-integration-hub"
+        ],
+        "subscribers": [
+          "jax-a11y/skintwin-asi",
+          "jax-a11y/skintwin-marketplaces-buyer-app"
+        ],
+        "payloadSchema": "contracts/events/product.updated.schema.json"
+      },
+      "inventory.updated": {
+        "publishers": [
+          "rzonedevops/skinsource-pro",
+          "jax-a11y/skintwin-integration-hub"
+        ],
+        "subscribers": [
+          "jax-a11y/skintwin-asi",
+          "rzonedevops/regima-salon-suite"
+        ],
+        "payloadSchema": "contracts/events/inventory.updated.schema.json"
+      },
+      "appointment.created": {
+        "publishers": [
+          "jax-a11y/skintwin-integration-hub",
+          "jax-a11y/skintwin-salon"
+        ],
+        "subscribers": [
+          "jax-a11y/skintwin-customer-portal"
+        ],
+        "payloadSchema": "contracts/events/appointment.created.schema.json"
+      },
+      "appointment.updated": {
+        "publishers": [
+          "jax-a11y/skintwin-integration-hub"
+        ],
+        "subscribers": [
+          "jax-a11y/skintwin-customer-portal"
+        ],
+        "payloadSchema": "contracts/events/appointment.updated.schema.json"
+      },
+      "course.completed": {
+        "publishers": [
+          "rzonedevops/regima-training-lms"
+        ],
+        "subscribers": [
+          "jax-a11y/skintwin-customer-portal"
+        ],
+        "payloadSchema": "contracts/events/course.completed.schema.json"
+      },
+      "certification.awarded": {
+        "publishers": [
+          "rzonedevops/regima-training-lms"
+        ],
+        "subscribers": [
+          "jax-a11y/skintwin-customer-portal"
+        ],
+        "payloadSchema": "contracts/events/certification.awarded.schema.json"
+      }
+    }
+  },
+  "serviceEnv": {
+    "SKINTWIN_GATEWAY_URL": "Base URL of the API Gateway (single public entry point)",
+    "SKINTWIN_INTEGRATION_HUB_URL": "Base URL of the integration hub (default http://localhost:5000)",
+    "SKINTWIN_COGNITIVE_API_URL": "Base URL of the cognitive service (/api/cognitive/*)",
+    "SKINTWIN_USER_API_URL": "Base URL of the Customer & Org service (/api/users/*)",
+    "SKINTWIN_LMS_API_URL": "Base URL of the LMS service (/api/lms/*)",
+    "SKINTWIN_EVENT_BUS_URL": "Base URL of the event bus facade (/api/events/*)"
+  },
+  "repositories": [
+    {
+      "github": "jax-a11y/skintwin-ecosystem-design",
+      "layer": "governance",
+      "role": "design-docs",
+      "description": "Central architecture hub: ecosystem design docs, live registry, event contracts, reusable CI workflows, E2E specs.",
+      "designAlias": "skintwin-ecosystem-design",
+      "provides": [
+        "event-contracts",
+        "reusable-ci"
+      ],
+      "consumes": [],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "7 reusable workflow_call templates (ci-node, ci-python, ci-e2e, ci-contracts, ci-security, ci-container, ci-release)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/skintwin-workbench",
+      "layer": "governance",
+      "role": "contracts-hub",
+      "description": "SkinTwin Cognitive Alchemist Workbench: contract-and-docs hub for the Shopify app 'central nervous system', MRP and workbench OpenAPI specs with Spectral linting and MSW mocks.",
+      "designAlias": "skintwin (Alchemist Engine spec)",
+      "provides": [
+        "alchemist-engine-spec"
+      ],
+      "consumes": [
+        "procurement-api"
+      ],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "pr-checks.yml (Spectral OpenAPI lint, oasdiff breaking-change check)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/skintwin-asi",
+      "layer": "commerce-runtime",
+      "role": "shopify-app",
+      "description": "Shopify embedded admin app (Next.js 15 + Polaris): ASI cognitive workbench for merchants \u2014 INCI/ingredient analysis, skin profiles, recommendations inside Shopify admin.",
+      "designAlias": "skintwin-asi (Shopify App Service)",
+      "provides": [],
+      "consumes": [
+        "cognitive-api",
+        "integration-api",
+        "alchemist-engine-spec"
+      ],
+      "events": {
+        "publishes": [],
+        "subscribes": [
+          "product.updated",
+          "inventory.updated"
+        ]
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (type-check, ESLint, Next build)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "rzonedevops/neuro-symbolic-core",
+      "layer": "cognitive",
+      "role": "cognitive-service",
+      "description": "Neural-symbolic hybrid foundation for SkinTwin-AI (Python monorepo: nettica knowledge graph + Flask REST API, optional JAX/PyTorch backends). Reference implementation of the cognitive layer.",
+      "designAlias": "multiskin",
+      "provides": [
+        "cognitive-api"
+      ],
+      "consumes": [
+        "alchemist-engine-spec"
+      ],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (ruff, mypy, pytest)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": "/api/cognitive/*"
+    },
+    {
+      "github": "rzonedevops/skin7nn",
+      "layer": "cognitive",
+      "role": "cognitive-service",
+      "description": "Heptavertonic cognitive architecture variant of neuro-symbolic-core: multiscale skin neural-network models packaged alongside the nettica symbolic graph.",
+      "designAlias": "multiskin (variant)",
+      "provides": [],
+      "consumes": [
+        "alchemist-engine-spec"
+      ],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (local: ruff, mypy, pytest; vendored pending org allowlist of hub reusable workflows)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/skintwin-customer-portal",
+      "layer": "business-apps",
+      "role": "customer-org-service",
+      "description": "Multi-tenant B2B/B2B2C portal (React 19 + tRPC + Drizzle): four roles, consultations, bookings, orders, payments, commissions. Plays the Customer & Org Service role (users, orgs, tenants, auth).",
+      "designAlias": "skintwin-customer-portal (Customer & Org Service)",
+      "provides": [
+        "user-api"
+      ],
+      "consumes": [
+        "cognitive-api",
+        "integration-api",
+        "lms-api"
+      ],
+      "events": {
+        "publishes": [
+          "user.created"
+        ],
+        "subscribes": [
+          "order.placed",
+          "order.created",
+          "course.completed",
+          "certification.awarded",
+          "appointment.created",
+          "appointment.updated",
+          "order.paid"
+        ]
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (pnpm, tsc, vitest, build, e2e)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": "/api/users/*"
+    },
+    {
+      "github": "rzonedevops/regima-training-lms",
+      "layer": "business-apps",
+      "role": "lms-service",
+      "description": "Professional skincare training LMS for RegimA's distributor network: module courses, quizzes, progress, certificates; xAPI/SCORM/LTI 1.3 interop. Plays the LMS Service role.",
+      "designAlias": "regima-training-lms (LMS Service)",
+      "provides": [
+        "lms-api"
+      ],
+      "consumes": [
+        "user-api",
+        "integration-api"
+      ],
+      "events": {
+        "publishes": [
+          "course.completed",
+          "certification.awarded"
+        ],
+        "subscribes": [
+          "user.created"
+        ]
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (local: npm ci, informational typecheck, build; vendored pending org allowlist of hub reusable workflows)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": "/api/lms/*"
+    },
+    {
+      "github": "rzonedevops/regima-train-nnllms",
+      "layer": "ml-training",
+      "role": "training-pipeline",
+      "description": "RegimA Training System variant with a simulated nn->llm->lms AI training/content pipeline layered on the LMS stack (React + Express, xAPI/SCORM export).",
+      "designAlias": "regima-training-lms (nn->llm->lms variant)",
+      "provides": [],
+      "consumes": [
+        "lms-api"
+      ],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (local: npm ci, informational typecheck, build; vendored pending org allowlist of hub reusable workflows)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/skintwin-integration-hub",
+      "layer": "integration",
+      "role": "integration-gateway",
+      "description": "Flask integration layer connecting the salon platform to Wix Bookings, OpenCart, and Shopify B2B: unified API gateway (/api/integrations/*), canonical Unified* data models, webhook router emitting unified events.",
+      "designAlias": "skintwin-integrations (E-commerce & Booking Service)",
+      "provides": [
+        "integration-api"
+      ],
+      "consumes": [],
+      "events": {
+        "publishes": [
+          "order.created",
+          "order.paid",
+          "product.updated",
+          "appointment.created",
+          "appointment.updated",
+          "inventory.updated"
+        ],
+        "subscribes": [
+          "user.created"
+        ]
+      },
+      "ci": {
+        "workflows": [
+          "ci-build.yml (ruff/flake8/mypy, pytest, DB checks)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": "/api/integrations/*"
+    },
+    {
+      "github": "jax-a11y/skintwin-salon",
+      "layer": "commerce-surface",
+      "role": "storefront",
+      "description": "Gatsby 4 salon booking and checkout storefront: service discovery, scheduling, client intake/consent, Paystack Terminal payment with Pusher real-time status.",
+      "designAlias": null,
+      "provides": [],
+      "consumes": [
+        "integration-api"
+      ],
+      "events": {
+        "publishes": [
+          "order.placed",
+          "appointment.created"
+        ],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (lint, typecheck, unit, Gatsby build)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "rzonedevops/regima-salon-suite",
+      "layer": "commerce-runtime",
+      "role": "operator-dashboard",
+      "description": "Shopify-embedded operator dashboard ('Atelier OS') for RegimA's multi-store Shopify network (React 19 + tRPC + Drizzle on MySQL/TiDB).",
+      "designAlias": null,
+      "provides": [],
+      "consumes": [
+        "integration-api",
+        "user-api"
+      ],
+      "events": {
+        "publishes": [],
+        "subscribes": [
+          "inventory.updated"
+        ]
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (local: pnpm install, typecheck, informational vitest, build; vendored pending org allowlist of hub reusable workflows)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/skintwin-marketplace-admin-app",
+      "layer": "commerce-runtime",
+      "role": "marketplace-admin",
+      "description": "Shopify marketplace channel admin app (Express + Apollo GraphQL BFF + Polaris/Channels UI) managing shops, products, and orders for the marketplace channel.",
+      "designAlias": null,
+      "provides": [
+        "marketplace-admin-graphql"
+      ],
+      "consumes": [],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (ESLint, Jest+Codecov, webpack build)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/skintwin-marketplaces-buyer-app",
+      "layer": "commerce-surface",
+      "role": "marketplace-buyer",
+      "description": "Buyer-facing marketplace frontend (Next.js 12 + MUI + Apollo) for discovering multi-shop skincare products, adapted from Shopify Marketplace Kit.",
+      "designAlias": "business-directory-template / bus-listing (directory surface)",
+      "provides": [],
+      "consumes": [
+        "marketplace-admin-graphql"
+      ],
+      "events": {
+        "publishes": [],
+        "subscribes": [
+          "product.updated"
+        ]
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (yarn, ESLint, next build)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/skintwin-ordering-agent",
+      "layer": "cognitive",
+      "role": "ordering-agent",
+      "description": "Conversational AI ordering agent on the Mastra framework: natural-language ordering with Paystack card/Mobile-Money payment.",
+      "designAlias": null,
+      "provides": [],
+      "consumes": [
+        "integration-api"
+      ],
+      "events": {
+        "publishes": [
+          "order.placed"
+        ],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (tsc, vitest, mastra build)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/skin-zone",
+      "layer": "governance",
+      "role": "marketplace-design-docs",
+      "description": "Architecture/design documentation for the Skin Zone multi-tenant beauty marketplace: ingredients, products, brands, salons, treatments, therapists (HGNN docs, docsify site).",
+      "designAlias": "business-directory-template (design)",
+      "provides": [],
+      "consumes": [],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (markdown lint, consistency checks)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "rzonedevops/skinsource-pro",
+      "layer": "erp-federation",
+      "role": "procurement-service",
+      "description": "Intelligent procurement platform: Flask/SQLAlchemy REST APIs for ingredients, suppliers, and RFQ lifecycle with a React frontend. Concrete procurement domain of the Federated ERP layer.",
+      "designAlias": "Federated ERP Service (procurement domain)",
+      "provides": [
+        "procurement-api"
+      ],
+      "consumes": [
+        "supplier-dataset"
+      ],
+      "events": {
+        "publishes": [
+          "inventory.updated"
+        ],
+        "subscribes": [
+          "order.paid"
+        ]
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (backend pytest + frontend vitest)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": "/api/erp/*"
+    },
+    {
+      "github": "rzonedevops/pcsdbx1",
+      "layer": "erp-federation",
+      "role": "supplier-intelligence",
+      "description": "Supplier-intelligence database: ~1,316 curated JSON listings (schema v1.0) of raw materials, packaging, equipment, and services for cosmetics manufacturing, with validation scripts and a Pages dashboard.",
+      "designAlias": null,
+      "provides": [
+        "supplier-dataset"
+      ],
+      "consumes": [],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "jekyll-gh-pages.yml (Pages deploy)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "rzonedevops/regima-cognitive-dashboard",
+      "layer": "observability",
+      "role": "cognitive-dashboard",
+      "description": "React dashboard visualizing the KSM cognitive pipeline for the RegimA skincare supply chain: AtomSpace metagraph, ECAN attention, command constellation UI.",
+      "designAlias": null,
+      "provides": [],
+      "consumes": [
+        "cognitive-api"
+      ],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "ci.yml (local: pnpm install, typecheck, build; vendored pending org allowlist of hub reusable workflows)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "rzonedevops/af.github.io",
+      "layer": "marketing",
+      "role": "brand-archive",
+      "description": "Static SingleFile archive of the R\u00e9gimA brand marketing sites (regima.site 2024 + regimazone.org 2025) deployed via GitHub Pages, with site-coverage reports.",
+      "designAlias": null,
+      "provides": [],
+      "consumes": [],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "jekyll-gh-pages.yml (Pages deploy)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/regimazone-org-mirror",
+      "layer": "marketing",
+      "role": "brand-archive",
+      "description": "Static SingleFile mirror of the RegimA Zone WordPress marketing site (regimazone.org), deployed via GitHub Pages.",
+      "designAlias": null,
+      "provides": [],
+      "consumes": [],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "jekyll-gh-pages.yml (Pages deploy)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    },
+    {
+      "github": "jax-a11y/bolt.ceo",
+      "layer": "dev-tooling",
+      "role": "orchestration-ide",
+      "description": "JAX CEO (Cognitive Execution Orchestration): bolt.diy fork \u2014 AI coding-agent web IDE with WebContainer runtime and Marduk / Deep Tree Echo agent personas, used as the ecosystem's orchestration/dev tool.",
+      "designAlias": "org-skin (dev/org tooling role)",
+      "provides": [],
+      "consumes": [],
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "ci": {
+        "workflows": [
+          "ci.yaml (typecheck + vitest)"
+        ],
+        "usesReusable": false
+      },
+      "gatewayPrefix": null
+    }
+  ]
+}

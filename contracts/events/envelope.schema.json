@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jax-a11y/skintwin-ecosystem-design/main/contracts/events/envelope.schema.json",
+  "title": "SkinTwin Event Envelope",
+  "type": "object",
+  "required": [
+    "id",
+    "type",
+    "payload"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^evt_[A-Za-z0-9_-]+$",
+      "description": "Unique event id; consumers must treat it as an idempotency key (exactly-once processing)"
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$",
+      "description": "Dot-separated topic, e.g. user.created, erp.product.synced"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Topic-specific payload; camelCase fields; see contracts/events/<type>.schema.json"
+    },
+    "partitionKey": {
+      "type": "string",
+      "description": "Ordering key; events with the same key are delivered in order"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "retryCount": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}
